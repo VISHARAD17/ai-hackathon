@@ -8,7 +8,9 @@
 
 ## What We're Building
 
-An AI copilot for filing and managing insurance claims. The user describes what happened in natural language. The agent **responds with interactive UI** — not text. Claim forms, damage assessment cards, coverage analysis dashboards, document upload widgets, settlement calculators, and approval flows — all rendered dynamically by the agent based on the conversation.
+An AI copilot for filing and managing insurance claims. The user describes what happened in natural language. 
+The agent **responds with interactive UI** — not text. Claim forms, damage assessment cards, 
+coverage analysis dashboards, document upload widgets, settlement calculators, and approval flows — all rendered dynamically by the agent based on the conversation.
 
 ### The Interaction Model
 

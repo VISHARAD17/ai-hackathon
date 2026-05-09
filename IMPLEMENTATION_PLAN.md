@@ -1,72 +1,92 @@
-# ClaimShield AI — Detailed Implementation Plan
+# ClaimShield AI — User Claim Filing System Implementation Plan
 
 ---
 
 ## Problem Statement
 
-ClaimShield AI is a real-time insurance claim fraud detection system. A user submits a claim (name, amount, diagnosis, procedure) through a web form; a Sanic backend runs a rule-based risk engine, stores the result in SQLite, and returns a risk score (0–100) plus human-readable flags explaining the risk.
+ClaimShield AI is a user-facing insurance claim filing system. Users submit their own insurance claims (personal details, medical information, treatment costs) through a web form. The system validates the claim in real-time, provides transparency about potential issues, generates a unique claim ID, and stores it for insurance company processing. Users can track their submitted claims and see their status.
 
 ---
 
 ## Requirements
 
-- Single-page form UI: name, claim amount, diagnosis, procedure
-- POST /analyze → risk score + flags (synchronous, real-time)
-- GET /claims → list of past claims
-- Rule-based risk engine (no ML required)
+- User claim submission form: personal info (name, email, policy number), medical details (diagnosis, procedure, doctor, treatment date), claim amount
+- POST /submit-claim → validates and stores claim, returns claim ID + validation feedback
+- GET /my-claims → user's claim history with status
+- Real-time validation and feedback (helps user understand any issues)
 - SQLite persistence
-- Results displayed inline on the same page (no page reload)
-- Deployable locally in under 2 minutes
+- Claim status tracking: Under Review → Approved/Rejected/Needs Info
+- Transparent feedback: if validation flags appear, explain why in user-friendly language
+- Simple single-page UI with claim form and claim history
 
 ---
 
 ## Proposed Solution
 
 ```
-frontend/          ← single index.html + style.css + app.js
+frontend/          ← Next.js app
+  app/
+    page.tsx       — main claim filing page
+    components/
+      ClaimForm.tsx
+      ClaimResult.tsx
+      ClaimHistory.tsx
 backend/
-  app.py           ← Sanic app, routes
-  risk_engine.py   ← pure rule evaluation, returns score + flags
-  database.py      ← SQLite init + CRUD helpers
+  app.py                — Sanic app, routes
+  validation_engine.py  — claim validation, user-friendly feedback
+  database.py           — SQLite init + CRUD helpers
   requirements.txt
 ```
 
-Single HTML page with a claim form. On submit, JS POSTs to Sanic, renders the result card inline. A "Past Claims" section fetches GET /claims on load and after each submission.
+Next.js single-page app with React components. User fills claim form, submits to Sanic API, receives claim ID and validation feedback. Claim history component shows user's submitted claims with status.
 
 ---
 
 ## UI Screens & Components
 
-### Screen 1 — Claim Submission + Results (single page)
+### Screen 1 — File New Claim + My Claims (single page)
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  🛡️  ClaimShield AI          [subtitle tagline]      │
+│  🛡️  ClaimShield AI - File Your Insurance Claim     │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
-│  ┌─── Submit a Claim ──────────────────────────┐   │
-│  │  Name          [_________________________]  │   │
-│  │  Claim Amount  [_________________________]  │   │
-│  │  Diagnosis     [_________________________]  │   │
-│  │  Procedure     [_________________________]  │   │
+│  ┌─── File a New Claim ────────────────────────┐   │
+│  │  Personal Information                       │   │
+│  │  Full Name         [_______________________]│   │
+│  │  Email             [_______________________]│   │
+│  │  Policy Number     [_______________________]│   │
 │  │                                             │   │
-│  │              [ Analyze Claim ]              │   │
+│  │  Medical Details                            │   │
+│  │  Diagnosis         [_______________________]│   │
+│  │  Procedure/Treatment [_____________________]│   │
+│  │  Doctor Name       [_______________________]│   │
+│  │  Treatment Date    [_______________________]│   │
+│  │                                             │   │
+│  │  Claim Amount ($)  [_______________________]│   │
+│  │                                             │   │
+│  │              [ Submit Claim ]               │   │
 │  └─────────────────────────────────────────────┘   │
 │                                                     │
-│  ┌─── Risk Analysis Result ────────────────────┐   │  ← hidden until submit
+│  ┌─── Submission Result ───────────────────────┐   │  ← shown after submit
 │  │                                             │   │
-│  │   Risk Score:  [ 78 / 100 ]  🔴 HIGH        │   │
+│  │   ✅ Claim Submitted Successfully!          │   │
+│  │   Claim ID: #CLM-2026-001234                │   │
 │  │                                             │   │
-│  │   Flags:                                    │   │
-│  │   ⚠️  High claim amount (>50,000)            │   │
-│  │   ⚠️  Procedure-diagnosis mismatch           │   │
+│  │   Status: Under Review                      │   │
+│  │                                             │   │
+│  │   📋 Validation Notes:                      │   │
+│  │   • High claim amount - may require         │   │
+│  │     additional documentation                │   │
+│  │   • Please ensure all receipts are ready    │   │
 │  │                                             │   │
 │  └─────────────────────────────────────────────┘   │
 │                                                     │
-│  ┌─── Past Claims ─────────────────────────────┐   │
-│  │  Name       Amount   Score   Status         │   │
-│  │  John Doe   50,000   78      HIGH           │   │
-│  │  Jane Smith  5,000   12      LOW            │   │
+│  ┌─── My Claims ───────────────────────────────┐   │
+│  │  Claim ID    Date      Amount   Status      │   │
+│  │  #CLM-001234 05/09/26  $5,000   Under Review│   │
+│  │  #CLM-001198 04/28/26  $1,200   Approved ✅  │   │
+│  │  #CLM-001156 04/15/26  $850     Approved ✅  │   │
 │  └─────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
@@ -74,26 +94,33 @@ Single HTML page with a claim form. On submit, JS POSTs to Sanic, renders the re
 **Component hierarchy (vanilla JS):**
 ```
 index.html
-├── <header>          — logo + title
-├── <section#form>
-│   ├── <form#claimForm>
-│   │   ├── input#name
-│   │   ├── input#amount
-│   │   ├── input#diagnosis
-│   │   ├── input#procedure
+├── <header>          — logo + title + tagline
+├── <section#claimForm>
+│   ├── <form#newClaimForm>
+│   │   ├── <fieldset#personalInfo>
+│   │   │   ├── input#fullName
+│   │   │   ├── input#email
+│   │   │   └── input#policyNumber
+│   │   ├── <fieldset#medicalDetails>
+│   │   │   ├── input#diagnosis
+│   │   │   ├── input#procedure
+│   │   │   ├── input#doctorName
+│   │   │   └── input#treatmentDate
+│   │   ├── input#claimAmount
 │   │   └── button#submitBtn
 │   └── <div#loadingSpinner>  (hidden by default)
-├── <section#result>  (hidden by default)
-│   ├── <div#scoreDisplay>    — big number + color badge
-│   └── <ul#flagsList>        — one <li> per flag
-└── <section#history>
-    └── <table#claimsTable>   — populated via GET /claims
+├── <section#submissionResult>  (hidden by default)
+│   ├── <div#successMessage>    — claim ID, status
+│   └── <div#validationNotes>   — helpful warnings/tips
+└── <section#myClaimsHistory>
+    └── <table#claimsTable>     — user's submitted claims
 ```
 
-**Risk score color coding:**
-- 0–30: green badge "LOW"
-- 31–60: yellow badge "MEDIUM"
-- 61–100: red badge "HIGH"
+**Claim status indicators:**
+- Under Review: blue badge
+- Approved: green badge with ✅
+- Rejected: red badge with ❌
+- Needs Info: yellow badge "Action Required"
 
 ---
 
@@ -101,29 +128,39 @@ index.html
 
 ```
 1. User opens index.html
-   → JS calls GET /claims → populates Past Claims table
+   → JS checks localStorage for saved email
+   → If email exists, calls GET /my-claims?email=xxx → populates claim history
 
-2. User fills form fields (name, amount, diagnosis, procedure)
+2. User fills claim form (all personal info, medical details, amount)
 
-3. User clicks "Analyze Claim"
+3. User clicks "Submit Claim"
+   → Client-side validation (required fields, email format, amount > 0)
    → submitBtn disabled, spinner shown
-   → JS POSTs { name, amount, diagnosis, procedure } to POST /analyze
+   → JS POSTs claim data to POST /submit-claim
 
 4. Sanic receives request
-   → validates fields (non-empty, amount is numeric)
-   → passes to risk_engine.evaluate(claim)
-   → risk_engine returns { risk_score, flags }
-   → database.save_claim(claim + result)
-   → returns JSON { risk_score, flags, status: "analyzed" }
+   → validates all required fields (400 if missing/invalid)
+   → runs validation_engine.validate_claim()
+   → generates unique claim ID: CLM-YYYY-NNNNNN
+   → stores claim in database with status "Under Review"
+   → returns { claim_id, status, validation_notes, submitted_at }
 
 5. JS receives response
    → hides spinner, re-enables button
-   → renders #result section with score + flags
-   → score badge color set by risk level
-   → calls GET /claims again → refreshes Past Claims table
+   → shows success message with claim ID
+   → displays validation notes (transparent, helpful feedback)
+   → clears form for next submission
+   → saves email to localStorage
+   → calls GET /my-claims?email=xxx → refreshes claim history table
 
-6. Error path
-   → network error or 4xx/5xx → shows inline error message in #result
+6. User can track claims
+   → claim history shows all submitted claims with current status
+   → user can see which claims are approved, under review, or need info
+
+7. Error path
+   → missing required fields → inline validation errors before submit
+   → invalid data → 400 response with specific error message
+   → network error → shows error message with retry option
 ```
 
 ---
@@ -141,34 +178,52 @@ frontend/
 **app.js structure:**
 ```javascript
 const API_BASE = 'http://localhost:8000'
+const USER_EMAIL = localStorage.getItem('userEmail') || ''
 
 // On page load
-loadClaims()
+if (USER_EMAIL) {
+  loadMyClaims(USER_EMAIL)
+}
 
 // Form submit handler
 claimForm.addEventListener('submit', async (e) => {
   e.preventDefault()
+  
+  if (!validateForm()) return
+  
   setLoading(true)
-  const payload = buildPayload()
-  const result = await postClaim(payload)   // POST /analyze
-  renderResult(result)
-  await loadClaims()                         // refresh table
+  const payload = buildClaimPayload()
+  const result = await submitClaim(payload)
+  
+  if (result.success) {
+    renderSubmissionResult(result)
+    clearForm()
+    await loadMyClaims(payload.email)
+    localStorage.setItem('userEmail', payload.email)
+  } else {
+    showError(result.error)
+  }
+  
   setLoading(false)
 })
 
 // Functions
-async function postClaim(payload) { ... }   // fetch POST /analyze
-async function loadClaims() { ... }         // fetch GET /claims
-function renderResult(data) { ... }         // update #result DOM
-function buildPayload() { ... }             // read form values
-function setLoading(bool) { ... }           // toggle spinner/button
-function getRiskLevel(score) { ... }        // LOW/MEDIUM/HIGH + color
+async function submitClaim(payload) { ... }     // fetch POST /submit-claim
+async function loadMyClaims(email) { ... }      // fetch GET /my-claims?email=
+function renderSubmissionResult(data) { ... }   // show claim ID + validation notes
+function buildClaimPayload() { ... }            // read all form values
+function validateForm() { ... }                 // client-side validation
+function clearForm() { ... }                    // reset form after submission
+function setLoading(bool) { ... }               // toggle spinner/button
+function getStatusBadge(status) { ... }         // color-coded status badges
+function showError(message) { ... }             // display error message
 ```
 
 **State model (no framework needed):**
 - Loading state: DOM class toggle on button + spinner div
-- Result state: show/hide #result section, update inner HTML
+- Result state: show/hide #submissionResult section, update inner HTML
 - History state: re-render table rows on each load
+- User tracking: localStorage for email (simple demo, would use auth in production)
 
 ---
 
@@ -177,68 +232,140 @@ function getRiskLevel(score) { ... }        // LOW/MEDIUM/HIGH + color
 ### File structure
 ```
 backend/
-├── app.py           — Sanic app, CORS, route registration
-├── risk_engine.py   — pure functions, no I/O
-├── database.py      — SQLite init + save/fetch helpers
-└── requirements.txt — sanic, aiosqlite
+├── app.py                — Sanic app, CORS, route registration
+├── validation_engine.py  — claim validation logic, user-friendly feedback
+├── database.py           — SQLite init + save/fetch helpers
+└── requirements.txt      — sanic, aiosqlite
 ```
 
 ### API Endpoints
 
-**POST /analyze**
+**POST /submit-claim**
 ```
-Request:  { name: str, amount: float, diagnosis: str, procedure: str }
-Response: { risk_score: int, flags: [str], status: "analyzed" }
-Errors:   400 { error: "missing fields" | "invalid amount" }
+Request:  { 
+  full_name: str, 
+  email: str, 
+  policy_number: str,
+  diagnosis: str, 
+  procedure: str,
+  doctor_name: str,
+  treatment_date: str,  # YYYY-MM-DD
+  amount: float
+}
+Response: { 
+  claim_id: str,           # CLM-2026-001234
+  status: "Under Review",
+  validation_notes: [str],
+  submitted_at: str
+}
+Errors:   400 { error: "missing required fields" | "invalid email" | "invalid amount" }
 ```
 
-**GET /claims**
+**GET /my-claims**
 ```
-Response: [ { id, name, amount, diagnosis, procedure, risk_score, flags, created_at }, ... ]
-          ordered by created_at DESC, limit 50
+Query params: email (for demo) or user_id (in production with auth)
+Response: [ 
+  { 
+    claim_id, 
+    full_name, 
+    amount, 
+    diagnosis, 
+    procedure, 
+    status,
+    validation_notes,
+    submitted_at
+  }, 
+  ... 
+]
+ordered by submitted_at DESC
 ```
 
-### Risk Engine Logic (`risk_engine.py`)
+**GET /claim/:claim_id** (optional - for detailed view)
+```
+Response: {
+  claim_id,
+  full_name,
+  email,
+  policy_number,
+  diagnosis,
+  procedure,
+  doctor_name,
+  treatment_date,
+  amount,
+  status,
+  validation_notes,
+  submitted_at,
+  updated_at
+}
+```
+
+### Validation Engine Logic (`validation_engine.py`)
 
 ```python
-def evaluate(name, amount, diagnosis, procedure) -> dict:
-    score = 0
-    flags = []
+def validate_claim(full_name, email, policy_number, diagnosis, procedure, 
+                   doctor_name, treatment_date, amount) -> dict:
+    """
+    Validates user claim and provides helpful feedback.
+    Returns validation notes to help user understand any potential issues.
+    """
+    notes = []
 
-    # Rule 1: High amount
+    # Validation 1: High amount - inform user about documentation
     if amount > 100_000:
-        score += 40
-        flags.append("Extremely high claim amount (>100,000)")
+        notes.append("High claim amount detected. Please ensure you have all receipts and medical reports ready for review.")
     elif amount > 50_000:
-        score += 25
-        flags.append("High claim amount (>50,000)")
+        notes.append("Claim amount is significant. Additional documentation may be requested during review.")
 
-    # Rule 2: Suspicious procedures
-    SUSPICIOUS = {"cosmetic surgery", "experimental treatment", "unverified therapy"}
-    if procedure.lower() in SUSPICIOUS:
-        score += 30
-        flags.append(f"Suspicious procedure: {procedure}")
-
-    # Rule 3: Diagnosis-procedure mismatch
-    MISMATCH_MAP = {
-        "fracture": {"x-ray", "cast", "surgery"},
-        "flu": {"rest", "medication", "antiviral"},
-        "diabetes": {"insulin", "medication", "diet counseling"},
+    # Validation 2: Check diagnosis-procedure alignment
+    COMMON_PAIRS = {
+        "fracture": ["x-ray", "cast", "surgery", "orthopedic"],
+        "flu": ["rest", "medication", "antiviral", "consultation"],
+        "diabetes": ["insulin", "medication", "counseling", "blood test"],
+        "dental": ["filling", "extraction", "root canal", "cleaning"],
+        "vision": ["eye exam", "glasses", "contact", "laser"]
     }
+    
     diag_key = diagnosis.lower()
-    if diag_key in MISMATCH_MAP:
-        if procedure.lower() not in MISMATCH_MAP[diag_key]:
-            score += 20
-            flags.append("Procedure does not match diagnosis")
+    proc_lower = procedure.lower()
+    
+    matched = False
+    for key, procedures in COMMON_PAIRS.items():
+        if key in diag_key:
+            if not any(p in proc_lower for p in procedures):
+                notes.append(f"The procedure '{procedure}' seems unusual for '{diagnosis}'. Please verify this is correct.")
+            matched = True
+            break
+    
+    if not matched and amount > 10_000:
+        notes.append("Please ensure diagnosis and procedure information is accurate for faster processing.")
 
-    # Rule 4: Missing/generic name
-    if len(name.strip()) < 3 or name.lower() in {"test", "unknown", "n/a"}:
-        score += 10
-        flags.append("Suspicious claimant name")
+    # Validation 3: Policy number format check
+    if len(policy_number.strip()) < 5:
+        notes.append("Policy number seems short. Please verify it's correct to avoid processing delays.")
+
+    # Validation 4: Treatment date validation
+    from datetime import datetime
+    try:
+        treatment = datetime.strptime(treatment_date, "%Y-%m-%d")
+        today = datetime.now()
+        if treatment > today:
+            notes.append("Treatment date is in the future. Please verify the date.")
+        elif (today - treatment).days > 365:
+            notes.append("Treatment date is over a year ago. Claims should typically be filed within 12 months.")
+    except:
+        notes.append("Please verify treatment date format (YYYY-MM-DD).")
+
+    # Validation 5: Email format
+    if "@" not in email or "." not in email:
+        notes.append("Please verify your email address for claim updates.")
+
+    # If everything looks good
+    if not notes:
+        notes.append("All information looks good! Your claim will be processed shortly.")
 
     return {
-        "risk_score": min(score, 100),
-        "flags": flags if flags else ["No significant risk factors detected"]
+        "validation_notes": notes,
+        "requires_review": len(notes) > 1
     }
 ```
 
@@ -246,42 +373,71 @@ def evaluate(name, amount, diagnosis, procedure) -> dict:
 
 ```sql
 CREATE TABLE IF NOT EXISTS claims (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL,
-    amount      REAL    NOT NULL,
-    diagnosis   TEXT    NOT NULL,
-    procedure   TEXT    NOT NULL,
-    risk_score  INTEGER NOT NULL,
-    flags       TEXT    NOT NULL,   -- JSON array stored as string
-    created_at  TEXT    DEFAULT (datetime('now'))
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    claim_id        TEXT    UNIQUE NOT NULL,
+    full_name       TEXT    NOT NULL,
+    email           TEXT    NOT NULL,
+    policy_number   TEXT    NOT NULL,
+    diagnosis       TEXT    NOT NULL,
+    procedure       TEXT    NOT NULL,
+    doctor_name     TEXT    NOT NULL,
+    treatment_date  TEXT    NOT NULL,
+    amount          REAL    NOT NULL,
+    status          TEXT    DEFAULT 'Under Review',
+    validation_notes TEXT   NOT NULL,
+    requires_review INTEGER DEFAULT 0,
+    submitted_at    TEXT    DEFAULT (datetime('now')),
+    updated_at      TEXT    DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_email ON claims(email);
+CREATE INDEX IF NOT EXISTS idx_claim_id ON claims(claim_id);
+CREATE INDEX IF NOT EXISTS idx_status ON claims(status);
 ```
 
 Helper functions:
 - `async init_db(app)` — called on Sanic startup listener
-- `async save_claim(conn, claim_data)` — INSERT + return rowid
-- `async get_claims(conn, limit=50)` — SELECT DESC
+- `async save_claim(conn, claim_data)` — INSERT + return claim_id
+- `async get_user_claims(conn, email)` — SELECT by email DESC
+- `async get_claim_by_id(conn, claim_id)` — SELECT single claim
+- `async update_claim_status(conn, claim_id, status)` — UPDATE status (for admin)
 
 ### app.py structure
 
 ```python
 from sanic import Sanic
 from sanic.response import json
-from sanic_ext import Extend   # or manual CORS headers
+from sanic_ext import Extend
 
 app = Sanic("ClaimShieldAI")
 
 @app.listener('before_server_start')
 async def setup_db(app, loop): ...
 
-@app.post("/analyze")
-async def analyze_claim(request): ...
+@app.post("/submit-claim")
+async def submit_claim(request): 
+    # Validate input
+    # Generate claim_id (CLM-YYYY-NNNNNN)
+    # Run validation_engine
+    # Save to database
+    # Return claim_id + validation_notes
+    ...
 
-@app.get("/claims")
-async def get_claims(request): ...
+@app.get("/my-claims")
+async def get_my_claims(request):
+    # Get email from query params
+    # Fetch user's claims
+    # Return list
+    ...
+
+@app.get("/claim/<claim_id>")
+async def get_claim_detail(request, claim_id):
+    # Fetch single claim by ID
+    # Return full details
+    ...
 ```
 
-CORS: add `Access-Control-Allow-Origin: *` header on all responses (needed since frontend is served from file:// or different port).
+CORS: add `Access-Control-Allow-Origin: *` header on all responses.
 
 ---
 
@@ -291,82 +447,91 @@ CORS: add `Access-Control-Allow-Origin: *` header on all responses (needed since
 - `requirements.txt` with `sanic`, `aiosqlite`
 - `database.py`: schema + init + save + fetch
 - `app.py`: Sanic app, DB listener, stub routes returning hardcoded JSON
-- **Demo:** `curl http://localhost:8000/claims` returns `[]`
+- **Demo:** `curl http://localhost:8000/my-claims?email=test@test.com` returns `[]`
 
-### Phase 2 — Risk Engine (20 min)
-- `risk_engine.py`: all 4 rules implemented as pure functions
+### Phase 2 — Validation Engine (20 min)
+- `validation_engine.py`: all validation rules with user-friendly messages
 - Unit-testable with no imports beyond stdlib
-- Wire into POST /analyze route
-- **Demo:** `curl -X POST /analyze -d '{"name":"John","amount":75000,"diagnosis":"flu","procedure":"surgery"}'` returns score + flags
+- Wire into POST /submit-claim route
+- **Demo:** `curl -X POST /submit-claim -d '{"full_name":"John","email":"john@test.com",...}'` returns claim_id + notes
 
-### Phase 3 — DB persistence (15 min)
-- Save each analyzed claim to SQLite
-- GET /claims returns real rows
-- **Demo:** Submit 2 claims, GET /claims shows both
+### Phase 3 — DB persistence + claim ID generation (15 min)
+- Generate unique claim IDs (CLM-YYYY-NNNNNN format)
+- Save each submitted claim to SQLite
+- GET /my-claims returns real rows filtered by email
+- **Demo:** Submit 2 claims, GET /my-claims shows both with unique IDs
 
 ### Phase 4 — Frontend form (30 min)
-- `index.html` + `style.css`: form layout, result card (hidden), history table
-- `app.js`: form submit → POST /analyze → render result
-- **Demo:** Fill form in browser, see risk score card appear
+- `index.html` + `style.css`: comprehensive form layout, result card (hidden), history table
+- `app.js`: form submit → POST /submit-claim → render result with claim ID
+- **Demo:** Fill form in browser, see success message with claim ID
 
-### Phase 5 — History table + polish (15 min)
-- `loadClaims()` on page load + after each submit
-- Risk badge colors (green/yellow/red)
+### Phase 5 — History table + user tracking (15 min)
+- `loadMyClaims()` on page load (if email in localStorage) + after each submit
+- Status badge colors (blue/green/red/yellow)
 - Loading spinner during API call
 - Error message display
-- **Demo:** Full end-to-end flow, past claims table updates live
+- **Demo:** Full end-to-end flow, claim history updates live
 
-### Phase 6 — Optional enhancements (if time permits)
-- More risk rules (repeated claimant name detection via DB lookup)
-- Animated score counter (JS)
-- Export claims as CSV
-- Simple bar chart of risk distribution
+### Phase 6 — Polish + validation feedback (10 min)
+- Display validation notes in user-friendly format
+- Form validation before submit
+- Clear form after successful submission
+- Smooth transitions and animations
+- **Demo:** Complete user journey from filing to tracking
+
+### Phase 7 — Optional enhancements (if time permits)
+- Claim detail view (click claim ID to see full details)
+- File upload for supporting documents
+- Email notifications (mock)
+- Admin panel to update claim status
+- Export claims as PDF
 
 ---
 
 ## Task Breakdown
 
 **Task 1: Project scaffold + DB layer**
-- Objective: Create directory structure, requirements.txt, database.py with schema + helpers
-- Implementation: `backend/` dir, `aiosqlite` for async SQLite, `init_db` creates table on startup
-- Test: Run `python -c "import asyncio; from database import init_db; ..."` — no errors, `claims.db` created
-- Demo: DB file exists, table schema verified with `sqlite3 claims.db .schema`
+- Create `backend/` directory structure
+- `requirements.txt` with sanic, aiosqlite
+- `database.py` with schema + helper functions
+- Test: DB file created, table schema verified
 
 **Task 2: Sanic app with stub routes**
-- Objective: Running Sanic server with POST /analyze and GET /claims returning hardcoded responses
-- Implementation: `app.py` with CORS headers, JSON responses, DB listener wired
-- Test: `curl http://localhost:8000/claims` → `[]`, `curl -X POST http://localhost:8000/analyze -H "Content-Type: application/json" -d '{...}'` → stub JSON
-- Demo: Server starts, both endpoints respond
+- `app.py` with CORS headers, JSON responses
+- DB listener wired
+- Stub routes for POST /submit-claim and GET /my-claims
+- Test: Server starts, both endpoints respond
 
-**Task 3: Risk engine implementation**
-- Objective: `risk_engine.py` with 4 rules, returns `{risk_score, flags}`
-- Implementation: Pure function `evaluate(name, amount, diagnosis, procedure)`, no I/O
-- Test: Call `evaluate("test", 75000, "flu", "surgery")` → score > 0, flags non-empty
-- Demo: Python REPL shows correct scores for various inputs
+**Task 3: Validation engine implementation**
+- `validation_engine.py` with all validation rules
+- User-friendly feedback messages
+- Pure function, no I/O
+- Test: Call with various inputs, verify notes are helpful
 
-**Task 4: Wire risk engine into POST /analyze + DB save**
-- Objective: Real analyze endpoint — validates input, calls engine, saves to DB, returns result
-- Implementation: Input validation (400 on missing/invalid), call `evaluate()`, `save_claim()`, return JSON
-- Test: POST with valid payload → 200 + score; POST with missing field → 400
-- Demo: `curl` POST returns real risk score; `sqlite3 claims.db "SELECT * FROM claims"` shows the row
+**Task 4: Wire validation engine + claim ID generation**
+- Generate unique claim IDs (CLM-YYYY-NNNNNN)
+- Input validation (400 on missing/invalid)
+- Call `validate_claim()`, `save_claim()`
+- Return claim_id + validation_notes
+- Test: POST returns real claim ID; DB shows the row
 
-**Task 5: GET /claims returns real data**
-- Objective: History endpoint returns all stored claims ordered by recency
-- Implementation: `get_claims()` query, serialize flags JSON string back to list
-- Test: After 2 POSTs, GET returns 2 records in correct order
-- Demo: `curl http://localhost:8000/claims` shows real claim history
+**Task 5: GET /my-claims returns user's claims**
+- Query by email parameter
+- Return claims ordered by submitted_at DESC
+- Test: After 2 POSTs with same email, GET returns both
 
-**Task 6: Frontend — form + result card**
-- Objective: `index.html` + `app.js` — form submits to API, result card renders inline
-- Implementation: Fetch POST /analyze on form submit, update DOM with score + flags, color-coded badge
-- Test: Open in browser, submit form, result card appears with correct data
-- Demo: Full browser demo — fill form, click Analyze, see risk score card
+**Task 6: Frontend — comprehensive claim form**
+- `index.html` with all form fields (personal + medical)
+- `style.css` for layout and styling
+- `app.js`: form submit → POST /submit-claim → render result
+- Test: Submit form, see claim ID and validation notes
 
-**Task 7: Frontend — history table + loading state**
-- Objective: Past Claims table populated from GET /claims; spinner during API call
-- Implementation: `loadClaims()` on page load + after submit; disable button during fetch; show error on failure
-- Test: Submit claim → table updates; disconnect server → error message shown
-- Demo: Complete end-to-end demo with live-updating history table and smooth UX
+**Task 7: Frontend — claim history + user tracking**
+- `loadMyClaims()` with localStorage email tracking
+- Status badges with colors
+- Loading states and error handling
+- Test: Complete flow with live-updating history
 
 ---
 
@@ -376,7 +541,7 @@ CORS: add `Access-Control-Allow-Origin: *` header on all responses (needed since
 ai-hackathon/
 ├── backend/
 │   ├── app.py
-│   ├── risk_engine.py
+│   ├── validation_engine.py
 │   ├── database.py
 │   └── requirements.txt
 ├── frontend/
@@ -392,12 +557,12 @@ ai-hackathon/
 
 ## Summary
 
-This plan provides a complete roadmap for building ClaimShield AI with:
+This plan provides a complete roadmap for building ClaimShield AI as a **user-facing claim filing system** with:
 
-1. **Clear UI Flow**: Single-page application with form → result → history table
-2. **Component Structure**: Minimal vanilla JS architecture with clear separation of concerns
-3. **Backend Architecture**: Sanic API with modular risk engine and database layer
-4. **Implementation Phases**: 7 tasks with clear objectives, tests, and demos
-5. **Time Estimate**: ~2 hours for core functionality, extensible for enhancements
+1. **User-Centric Flow**: Users file their own claims and track status
+2. **Transparent Validation**: Helpful feedback explains any potential issues
+3. **Claim Tracking**: Users can see all their submitted claims and current status
+4. **Simple Architecture**: Vanilla JS frontend + Sanic backend + SQLite
+5. **Implementation Phases**: 7 tasks with clear objectives, ~2 hours for core functionality
 
-The design prioritizes simplicity, speed of implementation, and clear demonstration value for a hackathon setting.
+The key difference from the original plan: **Users are claimants, not insurance companies**. The system helps users file claims properly and provides transparency about the validation process.
