@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from typing import Annotated, Any
 
-from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
@@ -270,11 +270,11 @@ TOOLS: list[Any] = [
 # ---------------------------------------------------------------------------
 
 
-def _build_llm() -> ChatAnthropic:
-    """Instantiate the Claude model bound to the UI tools."""
-    model = ChatAnthropic(
-        model="claude-sonnet-4-5",
-        anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+def _build_llm() -> ChatGoogleGenerativeAI:
+    """Instantiate the Gemini model bound to the UI tools."""
+    model = ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key=os.environ.get("GOOGLE_API_KEY", ""),
         max_tokens=4096,
     )
     return model.bind_tools(TOOLS)
