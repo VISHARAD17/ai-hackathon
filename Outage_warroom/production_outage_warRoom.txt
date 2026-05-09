@@ -1,0 +1,15 @@
+Idea 1: "Incident Commander AI" — Real-Time Devops/SRE Outage War RoomInstead of text alerts during a critical system outage, an agent spins up a custom command-and-control dashboard tailored to the specific failure.[Agent Detects: Database Latency Spike]
+        │
+        ▼ (Generates UI via CopilotKit)
+┌────────────────────────────────────────────────────────┐
+│ 🔴 Live War Room Dashboard                             │
+│ ┌──────────────────────┐ ┌───────────────────────────┐ │
+│ │ Metric Canvas        │ │ Remediation Flow (Active) │ │
+│ │ [~~~~~~~~ Graph ~~~~]│ │ [Button: Flush Cache]     │ │
+│ └──────────────────────┘ │ [Button: Scale Replis]    │ │
+│                          └───────────────────────────┘ │
+│ ┌────────────────────────────────────────────────────┐ │
+│ │ MCP Log Stream: Filtered to DB Container            │ │
+│ └────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────┘
+The User Prompt: "Production database is spiking in latency, help!"The Agentic Action: The backend agent uses an MCP server to query AWS/GCP logs, finds the container causing the issue, and extracts real-time performance metrics.The Generative UI: The agent renders a live Incident Command Center. It dynamically creates charts showing the specific failing metric, an embedded terminal streaming filtered error logs, and interactive triage buttons (e.g., [Flush Cache], [Scale Replicas by +2]). Clicking a button triggers the agent to execute infrastructure changes via MCP and update the UI live.Why it wins: It showcases high-stakes, real-world utility. Turning a terrifying log dump into an interactive, structured operational dashboard perfectly fits the Generative UI thesis.
