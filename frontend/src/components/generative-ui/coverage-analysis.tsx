@@ -1,46 +1,48 @@
+"use client";
+
 interface CoverageItem {
   name: string;
   covered: boolean;
-  limit?: string;
-  deductible?: string;
+  limit: string;
+  deductible: string;
 }
 
 interface CoverageAnalysisProps {
   policyNumber?: string;
   coverages?: CoverageItem[];
-  estimateMin?: number;
-  estimateMax?: number;
+  claimEstimate?: number;
   deductible?: number;
   loading?: boolean;
 }
 
 export function CoverageAnalysis({
   policyNumber = "AUTO-7829",
-  coverages = [
-    { name: "Collision", covered: true, limit: "$50,000", deductible: "$500" },
-    { name: "Comprehensive", covered: true, limit: "$50,000", deductible: "$250" },
-    { name: "Rental reimbursement", covered: true, limit: "$40/day", deductible: "—" },
-    { name: "Medical (PIP)", covered: true, limit: "$10,000", deductible: "—" },
-    { name: "Diminished value", covered: false, limit: "—", deductible: "—" },
-  ],
-  estimateMin = 3250,
-  estimateMax = 4400,
-  deductible = 500,
+  coverages = [],
+  claimEstimate = 0,
+  deductible = 0,
   loading = false,
 }: CoverageAnalysisProps) {
+  const insuranceCovers = Math.max(0, claimEstimate - deductible);
+
   return (
-    <div className="border rounded-lg p-6 bg-white shadow-sm">
-      <h3 className="text-xl font-semibold mb-4">
-        🛡️ Your Coverage — Policy {policyNumber}
+    <div className="border rounded-lg p-6 bg-white shadow-sm max-w-md">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <span className="text-2xl">🛡️</span> Your Coverage — Policy{" "}
+        {policyNumber}
       </h3>
+      {loading && (
+        <div className="text-sm text-blue-600 mb-3 animate-pulse">
+          Analyzing coverage...
+        </div>
+      )}
       <div className="overflow-x-auto mb-4">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b">
-              <th className="text-left py-2">Coverage</th>
-              <th className="text-left py-2">Status</th>
-              <th className="text-left py-2">Limit</th>
-              <th className="text-left py-2">Ded.</th>
+            <tr className="border-b text-gray-500">
+              <th className="text-left py-2 font-medium">Coverage</th>
+              <th className="text-left py-2 font-medium">Status</th>
+              <th className="text-left py-2 font-medium">Limit</th>
+              <th className="text-left py-2 font-medium">Ded.</th>
             </tr>
           </thead>
           <tbody>
@@ -51,45 +53,42 @@ export function CoverageAnalysis({
                   {item.covered ? (
                     <span className="text-green-600">✅ Yes</span>
                   ) : (
-                    <span className="text-red-600">❌ No</span>
+                    <span className="text-red-500">❌ No</span>
                   )}
                 </td>
-                <td className="py-2">{item.limit}</td>
-                <td className="py-2">{item.deductible}</td>
+                <td className="py-2 text-gray-600">{item.limit}</td>
+                <td className="py-2 text-gray-600">{item.deductible}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="bg-blue-50 border border-blue-200 rounded p-4 space-y-2">
-        <h4 className="font-semibold">For this claim:</h4>
-        <div className="flex justify-between text-sm">
-          <span>Damage estimate:</span>
-          <span>
-            ${estimateMin.toLocaleString()} - ${estimateMax.toLocaleString()}
-          </span>
+      {claimEstimate > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+          <h4 className="font-semibold text-sm">For this claim:</h4>
+          <div className="flex justify-between text-sm">
+            <span>Damage estimate:</span>
+            <span>${claimEstimate.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span>Your deductible:</span>
+            <span>-${deductible.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-sm border-t pt-2">
+            <span>You pay:</span>
+            <span>${deductible.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-sm">
+            <span>Insurance covers:</span>
+            <span>${insuranceCovers.toLocaleString()}</span>
+          </div>
         </div>
-        <div className="flex justify-between text-sm">
-          <span>Your deductible:</span>
-          <span>-${deductible.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between font-semibold border-t pt-2">
-          <span>You pay:</span>
-          <span>${deductible.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between font-semibold">
-          <span>Insurance covers:</span>
-          <span>
-            ${(estimateMin - deductible).toLocaleString()} - $
-            {(estimateMax - deductible).toLocaleString()}
-          </span>
-        </div>
-      </div>
+      )}
       <div className="mt-4 flex gap-2">
-        <button className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+        <button className="flex-1 bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors">
           File This Claim
         </button>
-        <button className="flex-1 border border-blue-600 text-blue-600 py-2 rounded hover:bg-blue-50">
+        <button className="flex-1 border border-blue-600 text-blue-600 py-2 rounded text-sm font-medium hover:bg-blue-50 transition-colors">
           Estimate Breakdown
         </button>
       </div>
