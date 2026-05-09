@@ -21,6 +21,17 @@ from copilotkit.integrations.fastapi import add_fastapi_endpoint  # noqa: E402
 
 from agent import graph  # noqa: E402
 
+
+def _patched_dict_repr(self):
+    return {
+        "name": self.name,
+        "description": self.description,
+        "type": "langgraph_agui",
+    }
+
+
+LangGraphAGUIAgent.dict_repr = _patched_dict_repr
+
 # ---------------------------------------------------------------------------
 # Application
 # ---------------------------------------------------------------------------
@@ -37,7 +48,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
