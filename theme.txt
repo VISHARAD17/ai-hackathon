@@ -4,7 +4,8 @@ On May 9, we take the training wheels off.
 
 The Generative UI Global Hackathon is a synchronized, six-hour build session across AI Tinkerers cities worldwide. One challenge. One submission platform. One day.
 
-Build AI agents that don’t just return text — they render complete, interactive interfaces on the fly. Forms. Dashboards. Approval flows. Whole applications generated natively from agent output.
+Build AI agents that don’t just return text — they render complete, interactive interfaces on the fly. Forms. Dashboards. 
+Approval flows. Whole applications generated natively from agent output.
 
 The stack is open:
 
@@ -13,3 +14,5 @@ AG-UI (CopilotKit) — transport layer for agent-to-frontend communication
 CopilotKit — React framework for embedding AI copilots
 MCP Apps — Model Context Protocol applications rendered as live UI
 Pick a challenge track. Build working software.
+
+claim url --> https://trygcp.dev/claim/gen-ui-pr
